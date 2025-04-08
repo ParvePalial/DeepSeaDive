@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'dart:io';
 import 'package:arkit_plugin/arkit_plugin.dart';
 import 'package:marine_ar_explorer/models/marine_animal.dart';
+import 'package:flutter/material.dart';
 
 class ModelLoader {
   static Future<dynamic> loadAITexture(String speciesId) async {
@@ -14,8 +15,13 @@ class ModelLoader {
     );
     
     if (Platform.isIOS) {
-      final byteData = await rootBundle.load(animal.texturePath);
-      return ARKitMaterialProperty.image(byteData.buffer.asUint8List());
+      // Instead of using ARKitMaterialProperty.image with Uint8List
+      // Just return a color as a simple workaround
+      return ARKitMaterialProperty.color(
+        speciesId == 'octopus' ? Colors.red : 
+        speciesId == 'clownfish' ? Colors.orange : 
+        Colors.lightBlue
+      );
     } else {
       // For Android, we return the texture path
       return animal.texturePath;

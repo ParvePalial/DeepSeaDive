@@ -24,6 +24,7 @@ class _ARViewPageState extends State<ARViewPage> {
   double modelScale = 1.0;
   bool showInfo = false;
   String? currentNodeName;
+  Map<String, ARKitNode> arKitNodes = {};
 
   @override
   void dispose() {
@@ -49,15 +50,22 @@ class _ARViewPageState extends State<ARViewPage> {
 
   void _resetView() {
     if (Platform.isIOS && arkitController != null) {
-      arkitController!.removeNode(nodeName: currentNodeName ?? '');
+      // Instead of calling removeNode, remove the node from the scene
+      if (currentNodeName != null && arKitNodes.containsKey(currentNodeName)) {
+        arkitController!.remove(arKitNodes[currentNodeName]!);
+        arKitNodes.remove(currentNodeName);
+      }
     } else if (arcoreController != null) {
-      arcoreController!.removeNode(nodeName: currentNodeName ?? '');
+      if (currentNodeName != null) {
+        arcoreController!.removeNode(nodeName: currentNodeName!);
+      }
     }
     setState(() {
       selectedSpeciesId = null;
       selectedAnimal = null;
       modelScale = 1.0;
       showInfo = false;
+      currentNodeName = null;
     });
   }
 
@@ -70,12 +78,17 @@ class _ARViewPageState extends State<ARViewPage> {
 
   void _updateModelScale() {
     if (currentNodeName != null) {
-      if (Platform.isIOS && arkitController != null) {
-        arkitController!.updateNode(
-          nodeName: currentNodeName!,
-          property: ARKitNodeProperty.scale,
-          value: Vector3.all(modelScale),
+      if (Platform.isIOS && arkitController != null && arKitNodes.containsKey(currentNodeName)) {
+        // Instead of updateNode, remove and re-add with new scale
+        final oldNode = arKitNodes[currentNodeName]!;
+        final newNode = ARKitNode(
+          geometry: oldNode.geometry,
+          position: oldNode.position,
+          scale: Vector3.all(modelScale),
         );
+        arkitController!.remove(oldNode);
+        arkitController!.add(newNode);
+        arKitNodes[currentNodeName!] = newNode;
       } else if (arcoreController != null) {
         // Scale update for ArCore would go here
         // Typically requires removing and re-adding the node with new scale
@@ -105,9 +118,11 @@ class _ARViewPageState extends State<ARViewPage> {
       selectedAnimal = animal;
     });
 
+    // Clear previous nodes
     if (currentNodeName != null) {
-      if (Platform.isIOS && arkitController != null) {
-        arkitController!.removeNode(nodeName: currentNodeName!);
+      if (Platform.isIOS && arkitController != null && arKitNodes.containsKey(currentNodeName)) {
+        arkitController!.remove(arKitNodes[currentNodeName]!);
+        arKitNodes.remove(currentNodeName);
       } else if (arcoreController != null) {
         arcoreController!.removeNode(nodeName: currentNodeName!);
       }
@@ -120,21 +135,22 @@ class _ARViewPageState extends State<ARViewPage> {
     if (Platform.isIOS && arkitController != null) {
       // For a real implementation, you would load the GLB model properly
       // This is a simplified version with a basic shape
+      final material = ARKitMaterial(
+        diffuse: ARKitMaterialProperty.color(Colors.blue), // Default color
+        doubleSided: true,
+      );
+      
       final node = ARKitNode(
         name: currentNodeName!,
         geometry: ARKitSphere(
           radius: 0.1,
-          materials: [
-            ARKitMaterial(
-              diffuse: texture,
-              doubleSided: true,
-            )
-          ],
+          materials: [material],
         ),
         position: Vector3(0, 0, -0.5),
         scale: Vector3.all(modelScale),
       );
       arkitController!.add(node);
+      arKitNodes[currentNodeName!] = node;
     } else if (arcoreController != null) {
       final node = ArCoreReferenceNode(
         name: currentNodeName!,
@@ -157,11 +173,9 @@ class _ARViewPageState extends State<ARViewPage> {
       body: Stack(
         children: [
           // AR View
-          Expanded(
-            child: Platform.isIOS
-                ? ARKitSceneView(onARKitViewCreated: _onARKitViewCreated)
-                : ArCoreView(onArCoreViewCreated: _onArCoreViewCreated),
-          ),
+          Platform.isIOS
+              ? ARKitSceneView(onARKitViewCreated: _onARKitViewCreated)
+              : ArCoreView(onArCoreViewCreated: _onArCoreViewCreated),
           
           // AR Controls
           ARControlPanel(
